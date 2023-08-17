@@ -13,8 +13,6 @@
 #include "enums.h"
 #include "units.h"
 
-extern "C" AIVOICESDK_API int Add(int a, int b);
-
 namespace AiVoice {
 
 namespace Converter {
