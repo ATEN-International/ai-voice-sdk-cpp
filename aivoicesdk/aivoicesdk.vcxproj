@@ -160,7 +160,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="config.h" />
-    <ClInclude Include="configtest.h" />
     <ClInclude Include="converter.h" />
     <ClInclude Include="enums.h" />
     <ClInclude Include="framework.h" />
@@ -169,7 +168,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="config.cpp" />
-    <ClCompile Include="configtest.cpp" />
     <ClCompile Include="converter.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="enums.cpp" />

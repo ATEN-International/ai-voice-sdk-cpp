@@ -37,8 +37,8 @@ private:
 public:
     AiVoice::Enums::Voice voice = AiVoice::Enums::Voice::None;
 
-    converterConfig(std::string token, std::string serverUrl);
-    ~converterConfig();
+    AIVOICESDK_API converterConfig(std::string token, std::string serverUrl);
+    AIVOICESDK_API ~converterConfig();
 
     AIVOICESDK_API void setToken(std::string token);
     AIVOICESDK_API void setServer(std::string serverUrl);

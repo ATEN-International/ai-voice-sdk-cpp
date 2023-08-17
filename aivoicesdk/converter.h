@@ -28,8 +28,8 @@ public:
     std::string detail;
     std::string errorMsg;
 
-    converterResult();
-    ~converterResult();
+    AIVOICESDK_API converterResult();
+    AIVOICESDK_API ~converterResult();
 
     void setCallback(std::function<void(const std::string&)> callback);
 
