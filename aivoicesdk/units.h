@@ -5,7 +5,6 @@
 
 #include "config.h"
 #include "enums.h"
-
 #include "json/nlohmann/json.hpp"
 
 using json = nlohmann::json;
@@ -40,7 +39,7 @@ public:
     json addTextTask(std::string text);
     json addSsmlTask(std::string text);
     json getTaskStatus(std::string taskId);
-    json getTaskAudio(std::string taskId, std::string fileName);
+    json getTaskAudio(std::string taskId, std::vector<char>& audioData);
 };
 
 }  // namespace Units

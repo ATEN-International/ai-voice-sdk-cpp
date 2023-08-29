@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <map>
+#include <vector>
 
 #include "config.h"
 #include "enums.h"
@@ -19,19 +20,16 @@ namespace Converter {
 
 class converterResult {
 private:
-    std::function<void(const std::string&)> callbackFunc;
-
 public:
     AiVoice::Enums::ConverterStatus status;
     std::string detail;
     std::string errorMsg;
+    std::vector<char> data;
 
     AIVOICESDK_API converterResult();
     AIVOICESDK_API ~converterResult();
 
-    void setCallback(std::function<void(const std::string&)> callback);
-
-    AIVOICESDK_API void save(std::string filename);
+    AIVOICESDK_API void save(std::string fileName);
 };
 
 // ================================================================================
@@ -44,7 +42,6 @@ private:
 
     std::string checkReservedWord(const std::string& text);
     std::string translateResultCode(json resultJson);
-    void getAudio(std::string filenamme);
     void updateHandlerConfig();
 
 public:
@@ -59,7 +56,7 @@ public:
     AIVOICESDK_API void showText();
     AIVOICESDK_API converterResult run();
     AIVOICESDK_API converterResult checkStatus();
-    AIVOICESDK_API converterResult getSpeech(std::string filename);
+    AIVOICESDK_API converterResult getSpeech();
 };
 extern "C" AIVOICESDK_API Converter::voiceConverter* createConverter(
     AiVoice::Config::converterConfig srcConfig);

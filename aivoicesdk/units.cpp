@@ -228,7 +228,7 @@ json restfulApiHandler::getTaskStatus(std::string taskId)
             {"code", 40499}};
 }
 
-json restfulApiHandler::getTaskAudio(std::string taskId, std::string fileName)
+json restfulApiHandler::getTaskAudio(std::string taskId, std::vector<char>& audioData)
 {
     std::string apiUrl = "/api/v1.0/syn/get_file";
     // std::string payload = "{\"task_id\":\"" + taskId + "\"}";
@@ -238,15 +238,9 @@ json restfulApiHandler::getTaskAudio(std::string taskId, std::string fileName)
         requestResponse result;
         restfulApiHandler::restfulSender(apiUrl, payload.dump(), result);
         if(result.contentType == "audio/wav") {
-            std::ofstream outputFile((fileName + ".wav"), std::ios::binary);
-            if(outputFile.is_open()) {
-                outputFile << result.response.rdbuf();
-                outputFile.close();
-                // std::cout << "Binary data written to output.wav" << std::endl;
-            }
-            else {
-                std::cerr << "[GetAudio] Save audio data fail." << std::endl;
-            }
+            result.response.seekg(0, std::ios::beg);
+            audioData.assign(std::istreambuf_iterator<char>(result.response),
+                             std::istreambuf_iterator<char>());
 
             return {{"data", " "}, {"code", 20001}};
         }

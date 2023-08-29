@@ -4,6 +4,7 @@
 
 #include "converter.h"
 
+#include <fstream>
 #include <iostream>
 
 namespace AiVoice {
@@ -44,15 +45,20 @@ converterResult::converterResult()
 
 converterResult::~converterResult() {}
 
-void converterResult::setCallback(std::function<void(const std::string&)> callback)
+void converterResult::save(std::string fileName = "aivoice")
 {
-    callbackFunc = callback;
-}
+    if(converterResult::data.size() < 1) {
+        std::cerr << "AiVoice: Audio data is empty, please 'getSpeech' first." << std::endl;
+        return;
+    }
 
-void converterResult::save(std::string filename = "aivoice")
-{
-    if(converterResult::callbackFunc) {
-        converterResult::callbackFunc(filename);
+    std::ofstream outputFile((fileName + ".wav"), std::ios::binary);
+    if(outputFile.is_open()) {
+        outputFile.write(converterResult::data.data(), converterResult::data.size());
+        outputFile.close();
+    }
+    else {
+        std::cerr << "AiVoice: Error opening output file." << std::endl;
     }
 }
 
@@ -65,10 +71,6 @@ voiceConverter::voiceConverter(AiVoice::Config::converterConfig srcConfig)
     voiceConverter::config.setServer(srcConfig.getServer());
     voiceConverter::config.setVoice(srcConfig.voice);
     updateHandlerConfig();
-    // std::cout << "My: " << voiceConverter::config.getToken() << " | Src: " << srcConfig.getToken() <<
-    // std::endl; std::cout << "My: " << voiceConverter::config.getServer() <<  | "Src: " <<
-    // srcConfig.getServer() << std::endl; std::cout << "My: " << voiceConverter::config.getVoiceValue() << "
-    // | Src: " << srcConfig.getVoiceValue() << std::endl;
 }
 
 voiceConverter::~voiceConverter() {}
@@ -79,10 +81,6 @@ void voiceConverter::updateConfig(AiVoice::Config::converterConfig srcConfig)
     voiceConverter::config.setServer(srcConfig.getServer());
     voiceConverter::config.setVoice(srcConfig.voice);
     updateHandlerConfig();
-    // std::cout << "My: " << voiceConverter::config.getToken() << " | Src: " << srcConfig.getToken() <<
-    // std::endl; std::cout << "My: " << voiceConverter::config.getServer() << " | Src: " <<
-    // srcConfig.getServer() << std::endl; std::cout << "My: " << voiceConverter::config.getVoiceValue() << "
-    // | Src: " << srcConfig.getVoiceValue() << std::endl;
 }
 
 void voiceConverter::updateHandlerConfig()
@@ -125,11 +123,6 @@ std::string voiceConverter::translateResultCode(json resultJson)
     return "status not found.";
 }
 
-void voiceConverter::getAudio(std::string filenamme)
-{
-    voiceConverter::getSpeech(filenamme);
-}
-
 void voiceConverter::addText(std::string text)
 {
     std::string tempText = voiceConverter::checkReservedWord(text);
@@ -170,7 +163,6 @@ converterResult voiceConverter::run()
     result.status = AiVoice::Enums::ConverterStatus::ConverterStartUp;
     result.detail = "";
     result.errorMsg = "";
-    result.setCallback([this](const std::string& filename) { voiceConverter::getAudio(filename); });
 
     if(voiceConverter::apiHandler.config["voice"] != voiceConverter::config.getVoiceValue()) {
         voiceConverter::updateHandlerConfig();
@@ -211,7 +203,6 @@ converterResult voiceConverter::checkStatus()
     result.status = AiVoice::Enums::ConverterStatus::ConverterStartUp;
     result.detail = "";
     result.errorMsg = "";
-    result.setCallback([this](const std::string& filename) { voiceConverter::getAudio(filename); });
 
     json resultJson = voiceConverter::apiHandler.getTaskStatus(voiceConverter::taskId);
 
@@ -237,14 +228,14 @@ converterResult voiceConverter::checkStatus()
     return result;
 }
 
-converterResult voiceConverter::getSpeech(std::string filename = "aivoice")
+converterResult voiceConverter::getSpeech()
 {
     converterResult result;
 
     if(voiceConverter::taskId.size() < 1) {
         // std::cerr << "Please start convert first." << std::endl;
         result.status = AiVoice::Enums::ConverterStatus::ConverVoiceFail;
-        result.errorMsg = "Please start convert first.";
+        result.errorMsg = "Please execute 'run' first.";
         return result;
     }
 
@@ -252,7 +243,7 @@ converterResult voiceConverter::getSpeech(std::string filename = "aivoice")
     result.detail = "";
     result.errorMsg = "";
 
-    json resultJson = voiceConverter::apiHandler.getTaskAudio(voiceConverter::taskId, filename);
+    json resultJson = voiceConverter::apiHandler.getTaskAudio(voiceConverter::taskId, result.data);
 
     if(resultJson["code"] != 20001) {
         result.status = AiVoice::Enums::ConverterStatus::GetSpeechFail;

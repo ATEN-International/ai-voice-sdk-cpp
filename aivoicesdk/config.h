@@ -52,7 +52,7 @@ public:
     AIVOICESDK_API std::string getSsmlLang();
 };
 
-extern "C" AIVOICESDK_API AiVoice::Config::converterConfig* CreateConfig(std::string token,
+extern "C" AIVOICESDK_API AiVoice::Config::converterConfig* createConfig(std::string token,
                                                                          std::string serverUrl);
 
 }  // namespace Config

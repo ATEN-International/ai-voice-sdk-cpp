@@ -73,7 +73,7 @@ std::string converterConfig::getSsmlLang()
     return converterConfig::ssmlLang;
 }
 
-AiVoice::Config::converterConfig* AiVoice::Config::CreateConfig(std::string token, std::string serverUrl)
+AiVoice::Config::converterConfig* AiVoice::Config::createConfig(std::string token, std::string serverUrl)
 {
     return new Config::converterConfig(token, serverUrl);
 };
