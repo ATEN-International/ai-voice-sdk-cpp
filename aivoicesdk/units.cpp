@@ -4,31 +4,35 @@
 
 #include "units.h"
 
-#include <curlpp/Easy.hpp>
-#include <curlpp/Options.hpp>
-#include <curlpp/cURLpp.hpp>
-#include <curlpp/infos.hpp>
+#include <curl/curl.h>
+
 #include <fstream>
 #include <iostream>
 #include <list>
 #include <sstream>
 #include <string>
 
-using namespace curlpp::options;
-
 namespace AiVoice {
 
 namespace Units {
 
 static void (*g_update_config_callback)(std::map<std::string, std::string> config) = nullptr;
+size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp);
 
 restfulApiHandler::restfulApiHandler()
 {
     config = {
         {"token", ""}, {"serverUrl", ""}, {"voice", ""}, {"ssmlVersion", "1.0.demo"}, {"ssmlLang", "zh-TW"}};
+
+    // init libcurl
+    curl_global_init(CURL_GLOBAL_ALL);
 }
 
-restfulApiHandler::~restfulApiHandler() {}
+restfulApiHandler::~restfulApiHandler()
+{
+    // close libcurl
+    curl_global_cleanup();
+}
 
 json restfulApiHandler::responseErrorHandler(AiVoice::Units::requestResponse& result)
 {
@@ -69,62 +73,75 @@ json restfulApiHandler::responseHandler(AiVoice::Units::requestResponse& result)
     }
 }
 
+size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp)
+{
+    size_t total_size = size * nmemb;
+    std::stringstream* response = static_cast<std::stringstream*>(userp);
+    response->write(static_cast<char*>(contents), total_size);
+    return total_size;
+}
+
 void restfulApiHandler::restfulSender(std::string apiUrl, std::string payload, requestResponse& result)
 {
-    // requestResponse result;
-    try {
-        curlpp::Cleanup myCleanup;
-
-        curlpp::Easy request;
-
-        // Set the URL.
-        request.setOpt<Url>((restfulApiHandler::config["serverUrl"] + apiUrl));
-        // request.setOpt<Url>(("" + apiUrl));
-
-        // Set the headers
-        std::list<std::string> headers;
-        headers.push_back(("Authorization: Bearer " + restfulApiHandler::config["token"]));
-        // headers.push_back("Authorization: Bearer ");
-        request.setOpt(new curlpp::options::HttpHeader(headers));
-
-        // Set timeout
-        request.setOpt(new curlpp::options::Timeout(10));
-
-        // 建立 JSON payload 字符串
-        // std::string payload = "{\"task_id\": \"1234567\", \"another_key\": \"another_value\"}";
-        // std::string payload = "{\"task_id\": \"1234567\"}";
-
-        // Set HTTP POST
-        request.setOpt(new curlpp::options::PostFields(payload));
-        request.setOpt(new curlpp::options::PostFieldSize(payload.length()));
-
-        request.setOpt(new curlpp::options::WriteStream(&result.response));
-
-        // Send to request
-        request.perform();
-
-        // std::cout << "Token: " << restfulApiHandler::config["token"] << std::endl;
-
-        // std::cout << "Response code: " << curlpp::infos::ContentType::get(request) << std::endl;
-
-        // std::cout << "Response code: " << curlpp::infos::ResponseCode::get(request) << std::endl;
-
-        // std::cout << "EffectiveUrl: " << curlpp::infos::EffectiveUrl::get(request) << std::endl;
-
-        // std::cout << "Response: " << response.str() << std::endl;
-
-        result.statusCode = curlpp::infos::ResponseCode::get(request);
-        result.contentType = curlpp::infos::ContentType::get(request);
-        // return result;
+    // create CURL object
+    CURL* curl = curl_easy_init();
+    if(!curl) {
+        std::cerr << "Error initializing libcurl." << std::endl;
+        return;
     }
-    catch(curlpp::RuntimeError& e) {
-        std::cout << e.what() << std::endl;
-        result.statusCode = 40499;
+
+    // ========================================
+    // Set request URL
+    curl_easy_setopt(curl, CURLOPT_URL, (restfulApiHandler::config["serverUrl"] + apiUrl).c_str());
+
+    // Set timeout with 10s
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+
+    // ========================================
+    // skip check certificate
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+
+    // ========================================
+    // Set post data(json format)
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+
+    // ========================================
+    // Set Content-Type header
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    // Set Authorization header
+    headers =
+        curl_slist_append(headers, ("Authorization: Bearer " + restfulApiHandler::config["token"]).c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    // ========================================
+    // Set callback func and callback data
+    std::stringstream response_stream;
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.response);
+
+    // ========================================
+    // Execute request
+    CURLcode res = curl_easy_perform(curl);
+    if(res != CURLE_OK) {
+        std::cerr << "Curl error: " << curl_easy_strerror(res) << std::endl;
     }
-    catch(curlpp::LogicError& e) {
-        std::cout << e.what() << std::endl;
-        result.statusCode = 40499;
-    }
+
+    // Get response status Code and Content-Type
+    long statusCode = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
+    result.statusCode = statusCode;
+
+    char* contentType = nullptr;
+    curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &contentType);
+    if(contentType)
+        // audio/wav or application/json
+        result.contentType = contentType;
+
+    // ========================================
+    // Release resouce
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
 }
 
 json restfulApiHandler::addTextTask(std::string text)
@@ -132,19 +149,9 @@ json restfulApiHandler::addTextTask(std::string text)
     if(restfulApiHandler::config["voice"].size() < 1)
         throw std::runtime_error("Converter voice is 'None'");
 
-    // bool isOk = false;
     std::string apiUrl = "/api/v1.0/syn/syn_text";
 
     json payload = {{"orator_name", restfulApiHandler::config["voice"]}, {"text", text}};
-
-    // json payload = {{"orator_name", "Aurora_noetic"}, {"text", text}};
-
-    // std::cerr << "[SSML]\n" << payload.dump() << "\n" << payload2 << std::endl;
-
-    // if(!isOk) {
-    //     // std::cerr << "[Enum] Get voice value fail." << std::endl;
-    //     throw std::runtime_error("[Enum] Get voice value fail.");
-    // }
 
     if(text.size() > 2000) {
         return {{"data", "Out of range"}, {"code", 40010}};
@@ -168,23 +175,12 @@ json restfulApiHandler::addSsmlTask(std::string text)
     if(restfulApiHandler::config["voice"].size() < 1)
         throw std::runtime_error("Converter voice is 'None'");
 
-    // bool isOk = false;
     std::string apiUrl = "/api/v1.0/syn/syn_ssml";
-    // AiVoice::Enums::getVoiceValue(restfulApiHandler::config.voice, isOk)
 
     json payload = {{"ssml", ("<speak xmlns=\"http://www.w3.org/2001/10/synthesis\" version=\""
                               + restfulApiHandler::config["ssmlVersion"] + "\" xml:lang=\""
                               + restfulApiHandler::config["ssmlLang"] + "\"><voice name=\""
                               + restfulApiHandler::config["voice"] + "\">" + text + "</voice></speak>")}};
-
-    // json payload = {{"ssml", ""}};
-
-    // std::cerr << "[SSML] " << payload.dump() << std::endl;
-
-    // if(!isOk) {
-    //     // std::cerr << "[Enums] Get voice value fail." << std::endl;
-    //     throw std::runtime_error("[Enums] Get voice value fail.");
-    // }
 
     if(payload["ssml"].size() > 1700) {
         return {{"data", "Out of range"}, {"code", 40010}};
@@ -212,12 +208,7 @@ json restfulApiHandler::getTaskStatus(std::string taskId)
     try {
         requestResponse result;
         restfulApiHandler::restfulSender(apiUrl, payload.dump(), result);
-        // std::cout << "Status Code: " << result.statusCode << std::endl;
-        // std::cout << "Content-Type: " << result.contentType << std::endl;
-        // std::cout << "Response: " << result.response << std::endl;
-        // std::cout << "Response(Json): " << json::parse(result.response)["code"] << std::endl;
         return restfulApiHandler::responseHandler(result);
-        // return json::parse(result.response);
     }
     catch(const std::exception& e) {
         std::cerr << "An unexpected error occurred: " << e.what() << std::endl;
@@ -231,7 +222,6 @@ json restfulApiHandler::getTaskStatus(std::string taskId)
 json restfulApiHandler::getTaskAudio(std::string taskId, std::vector<char>& audioData)
 {
     std::string apiUrl = "/api/v1.0/syn/get_file";
-    // std::string payload = "{\"task_id\":\"" + taskId + "\"}";
     json payload = {{"filename", (taskId + ".wav")}};
 
     try {
