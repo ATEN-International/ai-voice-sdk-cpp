@@ -2,8 +2,8 @@
 .vscode
 *.vcxproj.filters
 *.vcxproj.user
+*.wav
+
 Debug/
 Release/
-x64
-*.wav
 src
